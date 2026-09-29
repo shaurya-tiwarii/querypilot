@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres:16
+    container_name: querypilot-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: querypilot
+      POSTGRES_PASSWORD: querypilot
+      POSTGRES_DB: querypilot
+    ports:
+      - "5433:5432" # host port 5433 to avoid clashing with any local postgres
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U querypilot -d querypilot"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  pgdata:

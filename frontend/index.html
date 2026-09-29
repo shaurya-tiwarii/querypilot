@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>QueryPilot — ask your database</title>
+<style>
+  :root { --bg:#0b0d10; --panel:#14171c; --ink:#e8eaed; --mut:#9aa0a8;
+          --lime:#bef264; --line:#262b33; --red:#ff6b6b; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { background:var(--bg); color:var(--ink);
+         font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,sans-serif;
+         min-height:100vh; display:flex; flex-direction:column; align-items:center;
+         padding:48px 20px; }
+  .wrap { width:100%; max-width:900px; }
+  h1 { font-size:2rem; letter-spacing:-.02em; }
+  h1 .dot { color:var(--lime); }
+  p.sub { color:var(--mut); margin:8px 0 28px; font-size:.95rem; }
+  .badge { display:inline-block; font-size:.72rem; letter-spacing:.12em;
+           border:1px solid var(--lime); color:var(--lime); border-radius:99px;
+           padding:4px 12px; margin-bottom:14px; }
+  form { display:flex; gap:10px; margin-bottom:8px; }
+  input[type=text] { flex:1; background:var(--panel); border:1px solid var(--line);
+      color:var(--ink); border-radius:10px; padding:14px 16px; font-size:1rem; }
+  input[type=text]:focus { outline:none; border-color:var(--lime); }
+  button { background:var(--lime); color:#0b0d10; border:0; border-radius:10px;
+           padding:0 26px; font-weight:700; font-size:1rem; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .hint { color:var(--mut); font-size:.82rem; margin-bottom:26px; }
+  .hint code { color:var(--lime); font-size:.8rem; }
+  #sqlbox { display:none; background:#0e1114; border:1px solid var(--line);
+            border-left:3px solid var(--lime); border-radius:8px;
+            padding:14px 16px; margin-bottom:18px; overflow-x:auto; }
+  #sqlbox pre { font-family:ui-monospace,Menlo,Consolas,monospace;
+                font-size:.85rem; white-space:pre-wrap; }
+  #sqlbox .lbl { font-size:.7rem; letter-spacing:.14em; color:var(--mut); margin-bottom:8px; }
+  #err { display:none; background:rgba(255,107,107,.08); border:1px solid var(--red);
+         color:var(--red); border-radius:8px; padding:12px 16px; margin-bottom:18px;
+         font-size:.9rem; }
+  #meta { color:var(--mut); font-size:.82rem; margin-bottom:10px; display:none; }
+  table { width:100%; border-collapse:collapse; font-size:.88rem; display:none; }
+  th, td { text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); }
+  th { color:var(--lime); font-weight:600; font-size:.78rem;
+       letter-spacing:.06em; text-transform:uppercase;
+       position:sticky; top:0; background:var(--bg); }
+  tr:hover td { background:rgba(190,242,100,.04); }
+  .twrap { overflow:auto; max-height:60vh; border:1px solid var(--line); border-radius:10px; }
+  .empty { color:var(--mut); padding:40px; text-align:center; display:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="badge">MVP · IN PROGRESS</div>
+  <h1>QueryPilot<span class="dot">.</span></h1>
+  <p class="sub">Ask a question in plain English — get SQL + results from the demo store database.</p>
+
+  <form id="askform">
+    <input id="q" type="text" placeholder="e.g. Top 5 products by revenue this year" autocomplete="off">
+    <button id="go" type="submit">Ask</button>
+  </form>
+  <div class="hint">Read-only by design — only <code>SELECT</code>/<code>WITH</code> queries ever run.</div>
+
+  <div id="err"></div>
+  <div id="sqlbox"><div class="lbl">GENERATED SQL</div><pre id="sql"></pre></div>
+  <div id="meta"></div>
+  <div class="twrap"><table id="tbl"><thead></thead><tbody></tbody></table></div>
+  <div class="empty" id="empty">Query ran fine — just no rows matched.</div>
+</div>
+
+<script>
+const API = location.hostname === 'localhost' || location.hostname === '127.0.0.1'
+  ? 'http://localhost:8000' : '';  // same-origin when served behind the API
+const form = document.getElementById('askform'),
+      q = document.getElementById('q'),
+      go = document.getElementById('go'),
+      err = document.getElementById('err'),
+      sqlbox = document.getElementById('sqlbox'),
+      sqlpre = document.getElementById('sql'),
+      meta = document.getElementById('meta'),
+      tbl = document.getElementById('tbl'),
+      empty = document.getElementById('empty');
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const question = q.value.trim();
+  if (question.length < 3) return;
+  go.disabled = true; go.textContent = 'Thinking…';
+  err.style.display = 'none'; sqlbox.style.display = 'none';
+  tbl.style.display = 'none'; meta.style.display = 'none'; empty.style.display = 'none';
+  try {
+    const r = await fetch(API + '/ask', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({question})
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.detail || 'Request failed');
+    sqlpre.textContent = data.sql;
+    sqlbox.style.display = 'block';
+    meta.textContent = data.rows.length + ' row(s)' +
+      (data.truncated ? ' — truncated at ' + data.row_limit : '');
+    meta.style.display = 'block';
+    if (data.rows.length === 0) { empty.style.display = 'block'; return; }
+    tbl.querySelector('thead').innerHTML =
+      '<tr>' + data.columns.map(c => '<th></th>').join('') + '</tr>';
+    [...tbl.querySelectorAll('th')].forEach((th, i) => th.textContent = data.columns[i]);
+    tbl.querySelector('tbody').innerHTML = data.rows.map(row =>
+      '<tr>' + row.map(v => '<td>' + escapeHtml(v === null ? 'NULL' : String(v)) + '</td>').join('') + '</tr>'
+    ).join('');
+    tbl.style.display = 'table';
+  } catch (ex) {
+    err.textContent = '⚠ ' + ex.message;
+    err.style.display = 'block';
+  } finally {
+    go.disabled = false; go.textContent = 'Ask';
+  }
+});
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+</script>
+</body>
+</html>
