@@ -1,13 +1,9 @@
 # QueryPilot — natural-language SQL analytics
 
-> **Status: IN PROGRESS / MVP.** This is an early working prototype, not a finished
-> product. The core loop works (ask → SQL → results); auth, query history, charting,
-> and multi-database support are not built yet.
+> **Status: IN PROGRESS / MVP.** Early working prototype, not a finished product. The core loop works: ask → SQL → results. Not built yet: auth, query history, charting, multi-database support. That's the roadmap, not the README.
 
-Ask a question in plain English, get an answer from your database.
-QueryPilot sends your question plus the live database schema to Google Gemini,
-which writes the SQL. Every generated query passes strict read-only guardrails
-before it ever touches the database.
+Ask a question in plain English. Get an answer from your database.
+Here's how it works. QueryPilot sends your question plus the live database schema to Google Gemini, which writes the SQL, and then every generated query passes strict read-only guardrails before it ever touches your database. Short version: nothing that writes gets through.
 
 ## How it works
 
