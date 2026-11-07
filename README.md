@@ -78,3 +78,4 @@ querypilot/
 - [ ] Multiple saved database connections
 - [ ] Streaming SQL generation
 - [ ] Auth
+
